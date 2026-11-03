@@ -1,6 +1,6 @@
 
 use std::collections::HashSet;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -247,6 +247,115 @@ pub(crate) async fn download_files(
     }
 
     Ok(())
+}
+
+// ============================================================
+// INSTALL DEFAULT OPTIONS
+// ============================================================
+
+pub(crate) async fn install_default_options(
+    github: &GitHubClient,
+    manifest: &ModpackManifest,
+    install_dir: &Path,
+    modpack_id: &str,
+) -> Result<bool, String> {
+    let Some(options) = &manifest.default_options else {
+        return Ok(false);
+    };
+
+    let destination = install_dir.join("options.txt");
+
+    // Never overwrite an existing file or filesystem entry.
+    match std::fs::symlink_metadata(&destination) {
+        Ok(_) => {
+            println!(
+                "[Modpack] Vorhandene options.txt bleibt unverändert."
+            );
+            return Ok(false);
+        }
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!(
+                "options.txt konnte nicht überprüft werden: {}",
+                error
+            ));
+        }
+    }
+
+    // Download the default options file.
+    let repository_path = format!(
+        "{}/{}",
+        modpack_id,
+        options.path
+    );
+
+    println!(
+        "[GitHub] Downloading default options: {}",
+        repository_path
+    );
+
+    let bytes = github
+        .download_file(&repository_path)
+        .await?;
+
+    // Verify file size.
+    if bytes.len() as u64 != options.size {
+        return Err(
+            "Dateigröße der Standard-options.txt stimmt nicht überein."
+                .to_string()
+        );
+    }
+
+    // Verify SHA-256.
+    let actual_hash = format!(
+        "{:x}",
+        Sha256::digest(&bytes)
+    );
+
+    if !actual_hash.eq_ignore_ascii_case(&options.sha256) {
+        return Err(
+            "SHA-256-Prüfung der Standard-options.txt fehlgeschlagen."
+                .to_string()
+        );
+    }
+
+    // Create the file exclusively.
+    // An existing file can never be overwritten.
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+    {
+        Ok(file) => file,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::AlreadyExists =>
+        {
+            return Ok(false);
+        }
+        Err(error) => {
+            return Err(format!(
+                "Standard-options.txt konnte nicht angelegt werden: {}",
+                error
+            ));
+        }
+    };
+
+    if let Err(error) = file.write_all(&bytes) {
+        drop(file);
+        let _ = std::fs::remove_file(&destination);
+
+        return Err(format!(
+            "Standard-options.txt konnte nicht geschrieben werden: {}",
+            error
+        ));
+    }
+
+    println!(
+        "[Modpack] Standard-options.txt erfolgreich installiert."
+    );
+
+    Ok(true)
 }
 
 // ============================================================

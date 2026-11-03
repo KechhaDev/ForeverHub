@@ -83,6 +83,15 @@ pub(crate) async fn synchronize_profile(
     )
     .await?;
 
+    // Install default options.txt only if it does not exist.
+    sync::install_default_options(
+        &github,
+        &manifest,
+        &profile.install_dir,
+        modpack_id,
+    )
+    .await?;
+
     // Remove obsolete managed files and update inventory.
     let removed_files = sync::remove_obsolete_files(
         &manifest,

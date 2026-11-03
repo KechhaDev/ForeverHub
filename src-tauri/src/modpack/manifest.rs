@@ -16,6 +16,9 @@ pub(crate) struct ModpackManifest {
     pub(crate) minecraft_version: String,
     pub(crate) fabric_version: String,
 
+    #[serde(default)]
+    pub(crate) default_options: Option<ModpackFile>,
+
     pub(crate) files: Vec<ModpackFile>,
 }
 
@@ -94,7 +97,6 @@ fn validate_manifest(
     for file in &manifest.files {
         validate_file(file)?;
 
-        // Windows paths are case-insensitive by default.
         let normalized_path = file.path.to_lowercase();
 
         if !registered_paths.insert(normalized_path) {
@@ -103,6 +105,11 @@ fn validate_manifest(
                 file.path
             ));
         }
+    }
+
+    // Validate the optional default options file.
+    if let Some(default_options) = &manifest.default_options {
+        validate_default_options(default_options)?;
     }
 
     Ok(())
@@ -162,11 +169,7 @@ pub(super) fn validate_file(
         ));
     }
 
-    if file.sha256.len() != 64
-        || !file.sha256.chars().all(|character| {
-            character.is_ascii_hexdigit()
-        })
-    {
+    if !is_valid_sha256(&file.sha256) {
         return Err(format!(
             "Ungültiger SHA-256-Hash für: {}",
             path
@@ -174,4 +177,39 @@ pub(super) fn validate_file(
     }
 
     Ok(())
+}
+
+// ============================================================
+// DEFAULT OPTIONS VALIDATION
+// ============================================================
+
+fn validate_default_options(
+    file: &ModpackFile,
+) -> Result<(), String> {
+    if file.path != "options.txt" {
+        return Err(
+            "Der Pfad für default_options muss options.txt sein."
+                .to_string()
+        );
+    }
+
+    if !is_valid_sha256(&file.sha256) {
+        return Err(
+            "Ungültiger SHA-256-Hash für default_options."
+                .to_string()
+        );
+    }
+
+    Ok(())
+}
+
+// ============================================================
+// SHA-256 VALIDATION
+// ============================================================
+
+fn is_valid_sha256(hash: &str) -> bool {
+    hash.len() == 64
+        && hash.chars().all(|character| {
+            character.is_ascii_hexdigit()
+        })
 }
