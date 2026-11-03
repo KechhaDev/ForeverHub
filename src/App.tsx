@@ -3,7 +3,7 @@ import "./App.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -100,15 +100,15 @@ function App() {
     updateMessage.toLowerCase().includes("fehlgeschlagen") ||
     updateMessage.toLowerCase().includes("konnte nicht");
 
-  const updatePanelVariant = availableUpdate
-    ? "available"
-    : isInstallingUpdate
-      ? "installing"
+  const updatePanelVariant = isInstallingUpdate
+    ? "installing"
+    : availableUpdate
+      ? "available"
       : isUpdateError
         ? "error"
         : "current";
 
-  async function checkForUpdates() {
+  const checkForUpdates = useCallback(async () => {
     setIsCheckingUpdate(true);
     setIsUpdatePanelDismissed(false);
     setUpdateMessage("");
@@ -132,7 +132,12 @@ function App() {
     } finally {
       setIsCheckingUpdate(false);
     }
-  }
+  }, []);
+
+  // Automatischer Update-Scan beim Start
+  useEffect(() => {
+    void checkForUpdates();
+  }, [checkForUpdates]);
 
   async function installUpdate() {
     if (!availableUpdate) return;
@@ -486,17 +491,17 @@ function App() {
           aria-live="polite"
         >
           <div className="update-status-icon" aria-hidden="true">
-            {availableUpdate ? "↑" : isUpdateError ? "!" : "✓"}
+            {isUpdateError ? "!" : availableUpdate ? "↑" : "✓"}
           </div>
 
           <div className="update-info">
             <h3>
-              {availableUpdate
-                ? `Version ${availableUpdate.version} verfügbar`
-                : isInstallingUpdate
-                  ? "Update wird installiert"
-                  : isUpdateError
-                    ? "Update-Prüfung fehlgeschlagen"
+              {isInstallingUpdate
+                ? "Update wird installiert"
+                : isUpdateError
+                  ? "Update fehlgeschlagen"
+                  : availableUpdate
+                    ? `Version ${availableUpdate.version} verfügbar`
                     : "Du bist auf dem neuesten Stand"}
             </h3>
 
