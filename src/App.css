@@ -1429,3 +1429,190 @@ a:hover {
 ::-webkit-scrollbar-corner {
   background: #151C26;
 }
+
+
+
+/* ============================================================
+   LAUNCHER STATUS
+   ============================================================ */
+
+.launcher-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 15px 17px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  animation: launcher-status-appear 180ms ease-out;
+}
+
+.launcher-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 17px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.launcher-status-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-status-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: #e8edf2;
+}
+
+.launcher-status-content p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #aab4bf;
+  overflow-wrap: anywhere;
+}
+
+/* Active stages */
+
+.launcher-status-syncing,
+.launcher-status-preparing,
+.launcher-status-starting {
+  border-color: rgba(54, 211, 153, 0.2);
+  background: rgba(54, 211, 153, 0.045);
+}
+
+.launcher-status-syncing .launcher-status-icon,
+.launcher-status-preparing .launcher-status-icon,
+.launcher-status-starting .launcher-status-icon {
+  color: #36d399;
+  background: rgba(54, 211, 153, 0.12);
+}
+
+/* Running */
+
+.launcher-status-running {
+  border-color: rgba(54, 211, 153, 0.3);
+  background: rgba(54, 211, 153, 0.07);
+}
+
+.launcher-status-running .launcher-status-icon {
+  color: #36d399;
+  background: rgba(54, 211, 153, 0.15);
+}
+
+.launcher-status-running .launcher-status-label {
+  color: #36d399;
+}
+
+/* Stopped */
+
+.launcher-status-stopped {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.launcher-status-stopped .launcher-status-icon {
+  color: #aab4bf;
+}
+
+/* Error */
+
+.launcher-status-error {
+  border-color: rgba(255, 98, 107, 0.3);
+  background: rgba(255, 98, 107, 0.06);
+}
+
+.launcher-status-error .launcher-status-icon {
+  color: #ff626b;
+  background: rgba(255, 98, 107, 0.13);
+}
+
+.launcher-status-error .launcher-status-label {
+  color: #ff858c;
+}
+
+/* Animated activity indicator */
+
+.launcher-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 11px;
+}
+
+.launcher-status-indicator span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #36d399;
+  animation: launcher-status-pulse 1.1s ease-in-out infinite;
+}
+
+.launcher-status-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.launcher-status-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Disabled buttons */
+
+.launch-button:disabled,
+.profile-card button:disabled,
+.ram-control input:disabled {
+  cursor: not-allowed;
+}
+
+.launch-button:disabled {
+  opacity: 0.7;
+}
+
+.profile-card button:disabled {
+  opacity: 0.55;
+}
+
+/* Animations */
+
+@keyframes launcher-status-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+
+  30% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes launcher-status-appear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-status,
+  .launcher-status-indicator span {
+    animation: none;
+  }
+}

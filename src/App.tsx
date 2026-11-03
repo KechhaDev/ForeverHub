@@ -1,3 +1,4 @@
+
 import "./App.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
@@ -11,6 +12,10 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+
+// ============================================================
+// TYPES
+// ============================================================
 
 interface AccountInfo {
   username: string;
@@ -33,7 +38,73 @@ interface Profile {
   ramGb: number;
 }
 
+type LauncherStage =
+  | "syncing"
+  | "preparing"
+  | "starting"
+  | "running"
+  | "stopped"
+  | "error";
+
+interface LauncherStatus {
+  stage: LauncherStage;
+  profileName: string;
+  message: string;
+}
+
 const appWindow = getCurrentWindow();
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function getLauncherStageLabel(stage: LauncherStage): string {
+  switch (stage) {
+    case "syncing":
+      return "Modpack-Synchronisierung";
+
+    case "preparing":
+      return "Installation wird vorbereitet";
+
+    case "starting":
+      return "Minecraft wird gestartet";
+
+    case "running":
+      return "Minecraft läuft";
+
+    case "stopped":
+      return "Minecraft beendet";
+
+    case "error":
+      return "Fehler";
+  }
+}
+
+function getLauncherStageIcon(stage: LauncherStage): string {
+  switch (stage) {
+    case "syncing":
+      return "↻";
+
+    case "preparing":
+      return "⚙";
+
+    case "starting":
+      return "▶";
+
+    case "running":
+      return "●";
+
+    case "stopped":
+      return "✓";
+
+    case "error":
+      return "!";
+  }
+}
+
+// ============================================================
+// MINECRAFT AVATAR
+// ============================================================
 
 function MinecraftAvatar({ account }: { account: AccountInfo }) {
   const [skinLoaded, setSkinLoaded] = useState(false);
@@ -67,6 +138,10 @@ function MinecraftAvatar({ account }: { account: AccountInfo }) {
   );
 }
 
+// ============================================================
+// APP
+// ============================================================
+
 function App() {
   const [selectedProfile, setSelectedProfile] = useState("Vanilla");
 
@@ -78,6 +153,15 @@ function App() {
   const [isLaunching, setIsLaunching] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState("");
+
+  // ============================================================
+  // LAUNCHER STATUS
+  // ============================================================
+
+  const [launcherStatus, setLauncherStatus] =
+    useState<LauncherStatus | null>(null);
+
+  const isGameRunning = launcherStatus?.stage === "running";
 
   // ============================================================
   // CUSTOM WINDOW TITLEBAR
@@ -92,7 +176,6 @@ function App() {
 
     const target = event.target as HTMLElement;
 
-    // Fensterbuttons dürfen keine Drag-Aktion auslösen.
     if (target.closest("button")) return;
 
     try {
@@ -195,50 +278,47 @@ function App() {
         ? "error"
         : "current";
 
-const checkForUpdates = useCallback(async (manual = false) => {
-  setIsCheckingUpdate(true);
+  const checkForUpdates = useCallback(async (manual = false) => {
+    setIsCheckingUpdate(true);
 
-  // Bei manueller Suche das Popup sofort anzeigen.
-  if (manual) {
-    setIsUpdatePanelDismissed(false);
-    setUpdateMessage("Suche nach Updates...");
-  } else {
-    setUpdateMessage("");
-  }
-
-  try {
-    const update = await check();
-
-    if (update) {
-      setAvailableUpdate(update);
+    if (manual) {
       setIsUpdatePanelDismissed(false);
-      setUpdateMessage(`Version ${update.version} ist verfügbar.`);
+      setUpdateMessage("Suche nach Updates...");
     } else {
+      setUpdateMessage("");
+    }
+
+    try {
+      const update = await check();
+
+      if (update) {
+        setAvailableUpdate(update);
+        setIsUpdatePanelDismissed(false);
+        setUpdateMessage(`Version ${update.version} ist verfügbar.`);
+      } else {
+        setAvailableUpdate(null);
+
+        setUpdateMessage(
+          manual
+            ? "Du verwendest bereits die aktuelle Version."
+            : ""
+        );
+      }
+    } catch (error) {
+      console.error("Update-Prüfung fehlgeschlagen:", error);
+
       setAvailableUpdate(null);
 
-      // Nur bei manueller Suche "aktuell" anzeigen.
       setUpdateMessage(
         manual
-          ? "Du verwendest bereits die aktuelle Version."
+          ? "Update-Prüfung fehlgeschlagen: " + String(error)
           : ""
       );
+    } finally {
+      setIsCheckingUpdate(false);
     }
-  } catch (error) {
-    console.error("Update-Prüfung fehlgeschlagen:", error);
+  }, []);
 
-    setAvailableUpdate(null);
-
-    // Automatische Fehler nicht als Popup anzeigen.
-    setUpdateMessage(
-      manual
-        ? "Update-Prüfung fehlgeschlagen: " + String(error)
-        : ""
-    );
-  } finally {
-    setIsCheckingUpdate(false);
-  }
-}, []);
-  // Automatischer Update-Scan beim Start
   useEffect(() => {
     void checkForUpdates();
   }, [checkForUpdates]);
@@ -286,9 +366,11 @@ const checkForUpdates = useCallback(async (manual = false) => {
       setUpdateMessage("Update wurde installiert.");
     } catch (error) {
       console.error("Update-Installation fehlgeschlagen:", error);
+
       setUpdateMessage(
         "Update konnte nicht installiert werden: " + String(error)
       );
+
       setIsInstallingUpdate(false);
     }
   }
@@ -346,10 +428,19 @@ const checkForUpdates = useCallback(async (manual = false) => {
         ramGb,
       });
 
-      setStatusMessage(`RAM-Einstellung für ${profileName} gespeichert.`);
+      setStatusMessage(
+        `RAM-Einstellung für ${profileName} gespeichert.`
+      );
     } catch (error) {
-      console.error("RAM-Einstellung konnte nicht gespeichert werden:", error);
-      setStatusMessage(`RAM-Einstellung konnte nicht gespeichert werden: ${String(error)}`);
+      console.error(
+        "RAM-Einstellung konnte nicht gespeichert werden:",
+        error
+      );
+
+      setStatusMessage(
+        `RAM-Einstellung konnte nicht gespeichert werden: ${String(error)}`
+      );
+
       await loadProfiles();
     } finally {
       setIsSavingRam(false);
@@ -420,6 +511,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
 
         if (isMounted) {
           setAccount(null);
+
           setStatusMessage(
             "Gespeicherte Anmeldung konnte nicht wiederhergestellt werden. Bitte melde dich erneut an."
           );
@@ -458,6 +550,54 @@ const checkForUpdates = useCallback(async (manual = false) => {
         unlisten = cleanup;
       } else {
         cleanup();
+      }
+    }
+
+    void registerListener();
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, []);
+
+  // ============================================================
+  // LAUNCHER STATUS EVENT
+  // ============================================================
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let isMounted = true;
+
+    async function registerListener() {
+      try {
+        const cleanup = await listen<LauncherStatus>(
+          "launcher-status",
+          (event) => {
+            const status = event.payload;
+
+            setLauncherStatus(status);
+
+            if (
+              status.stage === "running" ||
+              status.stage === "stopped" ||
+              status.stage === "error"
+            ) {
+              setIsLaunching(false);
+            }
+          }
+        );
+
+        if (isMounted) {
+          unlisten = cleanup;
+        } else {
+          cleanup();
+        }
+      } catch (error) {
+        console.error(
+          "Launcher-Status-Listener konnte nicht registriert werden:",
+          error
+        );
       }
     }
 
@@ -526,6 +666,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
         "Microsoft-Seite konnte nicht geöffnet werden:",
         error
       );
+
       setStatusMessage(
         "Microsoft-Seite konnte nicht geöffnet werden: " + String(error)
       );
@@ -549,6 +690,8 @@ const checkForUpdates = useCallback(async (manual = false) => {
   // ============================================================
 
   async function launchGame() {
+    if (isLaunching || isGameRunning) return;
+
     if (!selectedProfile) {
       setStatusMessage("Es wurde kein Spielprofil ausgewählt.");
       return;
@@ -560,14 +703,13 @@ const checkForUpdates = useCallback(async (manual = false) => {
     }
 
     setIsLaunching(true);
+    setLauncherStatus(null);
     setStatusMessage("");
 
     try {
-      const response = await invoke<string>("launch_game", {
+      await invoke<string>("launch_game", {
         profileName: selectedProfile,
       });
-
-      setStatusMessage(response);
 
       await loadProfiles();
     } catch (error) {
@@ -593,10 +735,11 @@ const checkForUpdates = useCallback(async (manual = false) => {
         <div className="titlebar-brand">
           <img
             className="titlebar-logo"
-            src="/icon.png" 
+            src="/icon.png"
             alt=""
             draggable={false}
           />
+
           <span className="titlebar-name">ForeverHub</span>
         </div>
 
@@ -800,6 +943,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
                 <button
                   className="secondary-button"
                   onClick={logoutMicrosoft}
+                  disabled={isGameRunning}
                 >
                   Abmelden
                 </button>
@@ -877,7 +1021,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
             </div>
           )}
 
-          {/* STATUS */}
+          {/* GENERAL STATUS */}
 
           {statusMessage && (
             <div className="status-message">
@@ -919,13 +1063,15 @@ const checkForUpdates = useCallback(async (manual = false) => {
             )}
 
             <p>
-              {usesDevAuth
-                ? "Development-Modus – lokale Testsession"
-                : isRestoringSession
-                  ? "Microsoft-Sitzung wird im Hintergrund überprüft..."
-                  : account
-                    ? "Alles bereit. Du kannst Minecraft starten."
-                    : "Melde dich mit Microsoft an, um Minecraft zu spielen."}
+              {isGameRunning
+                ? `Minecraft läuft mit dem Profil ${launcherStatus.profileName}.`
+                : usesDevAuth
+                  ? "Development-Modus – lokale Testsession"
+                  : isRestoringSession
+                    ? "Microsoft-Sitzung wird im Hintergrund überprüft..."
+                    : account
+                      ? "Alles bereit. Du kannst Minecraft starten."
+                      : "Melde dich mit Microsoft an, um Minecraft zu spielen."}
             </p>
           </div>
 
@@ -935,17 +1081,52 @@ const checkForUpdates = useCallback(async (manual = false) => {
             disabled={
               (!usesDevAuth && isRestoringSession) ||
               isLaunching ||
+              isGameRunning ||
               isSavingRam ||
               profiles.length === 0 ||
               (!usesDevAuth && !account)
             }
           >
-            {isLaunching
-              ? "Minecraft wird gestartet..."
-              : !usesDevAuth && isRestoringSession
-                ? "Anmeldung wird geprüft..."
-                : "▶  Minecraft starten"}
+            {isGameRunning
+              ? "●  Minecraft läuft"
+              : isLaunching
+                ? "Minecraft wird gestartet..."
+                : !usesDevAuth && isRestoringSession
+                  ? "Anmeldung wird geprüft..."
+                  : "▶  Minecraft starten"}
           </button>
+
+          {/* LAUNCHER STATUS */}
+
+          {launcherStatus && (
+            <div
+              className={`launcher-status launcher-status-${launcherStatus.stage}`}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="launcher-status-icon" aria-hidden="true">
+                {getLauncherStageIcon(launcherStatus.stage)}
+              </div>
+
+              <div className="launcher-status-content">
+                <span className="launcher-status-label">
+                  {getLauncherStageLabel(launcherStatus.stage)}
+                </span>
+
+                <p>{launcherStatus.message}</p>
+
+                {launcherStatus.stage !== "stopped" &&
+                  launcherStatus.stage !== "error" &&
+                  launcherStatus.stage !== "running" && (
+                    <div className="launcher-status-indicator">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
         </section>
       </section>
 
@@ -1008,6 +1189,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
                     setSelectedProfile(profile.name);
                     setStatusMessage("");
                   }}
+                  disabled={isGameRunning || isLaunching}
                 >
                   {selectedProfile === profile.name
                     ? "Ausgewählt"
@@ -1072,7 +1254,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
                   selectedProfileData.ramGb ?? 4
                 );
               }}
-              disabled={isSavingRam || isLaunching}
+              disabled={isSavingRam || isLaunching || isGameRunning}
               aria-label="Minecraft-Arbeitsspeicher in Gigabyte"
               aria-valuetext={`${selectedProfileData.ramGb ?? 4} Gigabyte`}
               style={{ width: "100%", cursor: "pointer" }}
