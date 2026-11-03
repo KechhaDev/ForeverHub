@@ -94,9 +94,23 @@ function App() {
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isUpdatePanelDismissed, setIsUpdatePanelDismissed] = useState(false);
+
+  const isUpdateError =
+    updateMessage.toLowerCase().includes("fehlgeschlagen") ||
+    updateMessage.toLowerCase().includes("konnte nicht");
+
+  const updatePanelVariant = availableUpdate
+    ? "available"
+    : isInstallingUpdate
+      ? "installing"
+      : isUpdateError
+        ? "error"
+        : "current";
 
   async function checkForUpdates() {
     setIsCheckingUpdate(true);
+    setIsUpdatePanelDismissed(false);
     setUpdateMessage("");
 
     try {
@@ -104,15 +118,14 @@ function App() {
 
       if (update) {
         setAvailableUpdate(update);
-        setUpdateMessage(
-          `Version ${update.version} ist verfügbar.`
-        );
+        setUpdateMessage(`Version ${update.version} ist verfügbar.`);
       } else {
         setAvailableUpdate(null);
         setUpdateMessage("Du verwendest bereits die aktuelle Version.");
       }
     } catch (error) {
       console.error("Update-Prüfung fehlgeschlagen:", error);
+      setAvailableUpdate(null);
       setUpdateMessage(
         "Update-Prüfung fehlgeschlagen: " + String(error)
       );
@@ -150,12 +163,13 @@ function App() {
                 )
               );
             }
-
             break;
 
           case "Finished":
             setDownloadProgress(100);
-            setUpdateMessage("Update heruntergeladen. Installation startet...");
+            setUpdateMessage(
+              "Update heruntergeladen. Installation startet..."
+            );
             break;
         }
       });
@@ -443,26 +457,47 @@ function App() {
 
         <div className="header-update">
           <button
-            className="secondary-button"
+            className="update-check-button"
             onClick={checkForUpdates}
             disabled={isCheckingUpdate || isInstallingUpdate}
           >
-            {isCheckingUpdate
-              ? "Suche nach Updates..."
-              : "Nach Updates suchen"}
+            <span
+              className={`update-check-icon ${
+                isCheckingUpdate ? "is-spinning" : ""
+              }`}
+              aria-hidden="true"
+            >
+              ↻
+            </span>
+
+            <span>
+              {isCheckingUpdate ? "Suche läuft..." : "Nach Updates suchen"}
+            </span>
           </button>
         </div>
       </header>
 
       {/* UPDATE PANEL */}
 
-      {(availableUpdate || updateMessage) && (
-        <section className="update-panel">
+      {(availableUpdate || updateMessage) && !isUpdatePanelDismissed && (
+        <section
+          className={`update-panel update-panel-${updatePanelVariant}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="update-status-icon" aria-hidden="true">
+            {availableUpdate ? "↑" : isUpdateError ? "!" : "✓"}
+          </div>
+
           <div className="update-info">
             <h3>
               {availableUpdate
-                ? `Update auf Version ${availableUpdate.version} verfügbar`
-                : "Launcher-Updates"}
+                ? `Version ${availableUpdate.version} verfügbar`
+                : isInstallingUpdate
+                  ? "Update wird installiert"
+                  : isUpdateError
+                    ? "Update-Prüfung fehlgeschlagen"
+                    : "Du bist auf dem neuesten Stand"}
             </h3>
 
             <p>{updateMessage}</p>
@@ -481,16 +516,29 @@ function App() {
             )}
           </div>
 
-          {availableUpdate && (
+          <div className="update-actions">
+            {availableUpdate && (
+              <button
+                className="update-install-button"
+                onClick={installUpdate}
+                disabled={isInstallingUpdate}
+              >
+                {isInstallingUpdate
+                  ? "Wird installiert..."
+                  : "Jetzt aktualisieren"}
+              </button>
+            )}
+
             <button
-              onClick={installUpdate}
+              className="update-dismiss-button"
+              onClick={() => setIsUpdatePanelDismissed(true)}
               disabled={isInstallingUpdate}
+              aria-label="Update-Meldung schließen"
+              title="Meldung schließen"
             >
-              {isInstallingUpdate
-                ? "Update wird installiert..."
-                : "Jetzt aktualisieren"}
+              ×
             </button>
-          )}
+          </div>
         </section>
       )}
 
