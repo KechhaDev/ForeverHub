@@ -1,20 +1,30 @@
-
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "Default permissions for ForeverHub",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-start-dragging",
     "updater:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "https://microsoft.com/*" },
-        { "url": "https://www.microsoft.com/*" },
-        { "url": "https://login.microsoftonline.com/*" }
+        {
+          "url": "https://microsoft.com/*"
+        },
+        {
+          "url": "https://www.microsoft.com/*"
+        },
+        {
+          "url": "https://login.microsoftonline.com/*"
+        }
       ]
     }
   ]

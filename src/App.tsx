@@ -1,9 +1,14 @@
-
 import "./App.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
-import { useCallback, useEffect, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type MouseEvent,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -26,6 +31,8 @@ interface Profile {
   modpackVersion: string;
   devMode: boolean;
 }
+
+const appWindow = getCurrentWindow();
 
 function MinecraftAvatar({ account }: { account: AccountInfo }) {
   const [skinLoaded, setSkinLoaded] = useState(false);
@@ -72,6 +79,82 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("");
 
   // ============================================================
+  // CUSTOM WINDOW TITLEBAR
+  // ============================================================
+
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  async function handleTitlebarMouseDown(
+    event: MouseEvent<HTMLDivElement>
+  ) {
+    if (event.button !== 0) return;
+
+    const target = event.target as HTMLElement;
+
+    // Fensterbuttons dürfen keine Drag-Aktion auslösen.
+    if (target.closest("button")) return;
+
+    try {
+      await appWindow.startDragging();
+    } catch (error) {
+      console.error("Fenster konnte nicht verschoben werden:", error);
+    }
+  }
+
+  useEffect(() => {
+    let isMounted = true;
+    let unlisten: (() => void) | undefined;
+
+    async function initializeWindowState() {
+      try {
+        const maximized = await appWindow.isMaximized();
+
+        if (isMounted) {
+          setIsMaximized(maximized);
+        }
+
+        const cleanup = await appWindow.onResized(async () => {
+          const currentMaximized = await appWindow.isMaximized();
+
+          if (isMounted) {
+            setIsMaximized(currentMaximized);
+          }
+        });
+
+        if (isMounted) {
+          unlisten = cleanup;
+        } else {
+          cleanup();
+        }
+      } catch (error) {
+        console.error(
+          "Fensterstatus konnte nicht geladen werden:",
+          error
+        );
+      }
+    }
+
+    void initializeWindowState();
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, []);
+
+  async function toggleWindowMaximize() {
+    try {
+      await appWindow.toggleMaximize();
+      setIsMaximized(await appWindow.isMaximized());
+    } catch (error) {
+      console.error(
+        "Fensterstatus konnte nicht geändert werden:",
+        error
+      );
+    }
+  }
+
+  // ============================================================
   // APP VERSION
   // ============================================================
 
@@ -81,7 +164,10 @@ function App() {
     getVersion()
       .then(setAppVersion)
       .catch((error) => {
-        console.error("Launcher-Version konnte nicht geladen werden:", error);
+        console.error(
+          "Launcher-Version konnte nicht geladen werden:",
+          error
+        );
       });
   }, []);
 
@@ -108,32 +194,49 @@ function App() {
         ? "error"
         : "current";
 
-  const checkForUpdates = useCallback(async () => {
-    setIsCheckingUpdate(true);
+const checkForUpdates = useCallback(async (manual = false) => {
+  setIsCheckingUpdate(true);
+
+  // Bei manueller Suche das Popup sofort anzeigen.
+  if (manual) {
     setIsUpdatePanelDismissed(false);
+    setUpdateMessage("Suche nach Updates...");
+  } else {
     setUpdateMessage("");
+  }
 
-    try {
-      const update = await check();
+  try {
+    const update = await check();
 
-      if (update) {
-        setAvailableUpdate(update);
-        setUpdateMessage(`Version ${update.version} ist verfügbar.`);
-      } else {
-        setAvailableUpdate(null);
-        setUpdateMessage("Du verwendest bereits die aktuelle Version.");
-      }
-    } catch (error) {
-      console.error("Update-Prüfung fehlgeschlagen:", error);
+    if (update) {
+      setAvailableUpdate(update);
+      setIsUpdatePanelDismissed(false);
+      setUpdateMessage(`Version ${update.version} ist verfügbar.`);
+    } else {
       setAvailableUpdate(null);
-      setUpdateMessage(
-        "Update-Prüfung fehlgeschlagen: " + String(error)
-      );
-    } finally {
-      setIsCheckingUpdate(false);
-    }
-  }, []);
 
+      // Nur bei manueller Suche "aktuell" anzeigen.
+      setUpdateMessage(
+        manual
+          ? "Du verwendest bereits die aktuelle Version."
+          : ""
+      );
+    }
+  } catch (error) {
+    console.error("Update-Prüfung fehlgeschlagen:", error);
+
+    setAvailableUpdate(null);
+
+    // Automatische Fehler nicht als Popup anzeigen.
+    setUpdateMessage(
+      manual
+        ? "Update-Prüfung fehlgeschlagen: " + String(error)
+        : ""
+    );
+  } finally {
+    setIsCheckingUpdate(false);
+  }
+}, []);
   // Automatischer Update-Scan beim Start
   useEffect(() => {
     void checkForUpdates();
@@ -246,7 +349,7 @@ function App() {
       }
     }
 
-    initializeApp();
+    void initializeApp();
 
     return () => {
       isMounted = false;
@@ -295,7 +398,7 @@ function App() {
       }
     }
 
-    restoreSession();
+    void restoreSession();
 
     return () => {
       isMounted = false;
@@ -325,7 +428,7 @@ function App() {
       }
     }
 
-    registerListener();
+    void registerListener();
 
     return () => {
       isMounted = false;
@@ -386,7 +489,10 @@ function App() {
     try {
       await openUrl(deviceCode.verification_uri);
     } catch (error) {
-      console.error("Microsoft-Seite konnte nicht geöffnet werden:", error);
+      console.error(
+        "Microsoft-Seite konnte nicht geöffnet werden:",
+        error
+      );
       setStatusMessage(
         "Microsoft-Seite konnte nicht geöffnet werden: " + String(error)
       );
@@ -445,6 +551,52 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* CUSTOM TITLEBAR */}
+
+      <div
+        className="window-titlebar"
+        onMouseDown={handleTitlebarMouseDown}
+      >
+        <div className="titlebar-brand">
+          <img
+            className="titlebar-logo"
+            src="/icon.png" 
+            alt=""
+            draggable={false}
+          />
+          <span className="titlebar-name">ForeverHub</span>
+        </div>
+
+        <div className="titlebar-controls">
+          <button
+            className="titlebar-button"
+            onClick={() => void appWindow.minimize()}
+            aria-label="Minimieren"
+            title="Minimieren"
+          >
+            <span className="minimize-icon" />
+          </button>
+
+          <button
+            className="titlebar-button"
+            onClick={() => void toggleWindowMaximize()}
+            aria-label={isMaximized ? "Wiederherstellen" : "Maximieren"}
+            title={isMaximized ? "Wiederherstellen" : "Maximieren"}
+          >
+            <span className={isMaximized ? "restore-icon" : "maximize-icon"} />
+          </button>
+
+          <button
+            className="titlebar-button close-button"
+            onClick={() => void appWindow.close()}
+            aria-label="Schließen"
+            title="Schließen"
+          >
+            <span>×</span>
+          </button>
+        </div>
+      </div>
+
       {/* HEADER */}
 
       <header className="app-header">
@@ -463,7 +615,7 @@ function App() {
         <div className="header-update">
           <button
             className="update-check-button"
-            onClick={checkForUpdates}
+            onClick={() => void checkForUpdates(true)}
             disabled={isCheckingUpdate || isInstallingUpdate}
           >
             <span
