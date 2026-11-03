@@ -2,12 +2,13 @@
   "name": "foreverhub",
   "private": true,
   "version": "1.0",
-  "type": "module",
+  "type": "module",   
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
