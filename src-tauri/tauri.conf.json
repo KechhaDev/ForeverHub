@@ -2,7 +2,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ForeverHub",
-  "version": "1.0.1",
+  "version": "1.3.0",
   "identifier": "de.kechha",
   "build": {
     "frontendDist": "../dist",
