@@ -1,9 +1,8 @@
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // ============================================================
-// JAVA RUNTIME DETECTION
+// JAVA EXECUTABLE
 // ============================================================
 
 fn get_java_executable() -> &'static str {
@@ -14,6 +13,10 @@ fn get_java_executable() -> &'static str {
     }
 }
 
+// ============================================================
+// JAVA VERSION
+// ============================================================
+
 fn get_java_version(java_path: &Path) -> Result<u32, String> {
     let output = Command::new(java_path)
         .arg("-version")
@@ -23,7 +26,9 @@ fn get_java_version(java_path: &Path) -> Result<u32, String> {
         })?;
 
     if !output.status.success() {
-        return Err("Java-Version konnte nicht geprüft werden.".to_string());
+        return Err(
+            "Java-Version konnte nicht geprüft werden.".to_string()
+        );
     }
 
     let version_output = format!(
@@ -64,13 +69,19 @@ fn get_java_version(java_path: &Path) -> Result<u32, String> {
 
         return second_part
             .parse::<u32>()
-            .map_err(|_| "Java-Version konnte nicht gelesen werden.".to_string());
+            .map_err(|_| {
+                "Java-Version konnte nicht gelesen werden.".to_string()
+            });
     }
 
     Ok(major)
 }
 
-fn check_java(
+// ============================================================
+// CHECK JAVA
+// ============================================================
+
+pub(super) fn check_java(
     java_path: &Path,
     required_major: u32,
 ) -> Result<PathBuf, String> {
@@ -85,7 +96,7 @@ fn check_java(
     }
 
     println!(
-        "Java {} erfolgreich erkannt: {:?}",
+        "[Java] Java {} erfolgreich erkannt: {:?}",
         actual_major,
         java_path
     );
@@ -93,14 +104,20 @@ fn check_java(
     Ok(java_path.to_path_buf())
 }
 
-pub(super) fn find_java(required_major: u32) -> Result<PathBuf, String> {
+// ============================================================
+// SYSTEM JAVA DETECTION
+// ============================================================
+
+pub(super) fn find_system_java(
+    required_major: u32,
+) -> Result<PathBuf, String> {
     // 1. Check JAVA_HOME.
     if let Ok(java_home) = std::env::var("JAVA_HOME") {
         let java_path = PathBuf::from(java_home)
             .join("bin")
             .join(get_java_executable());
 
-        if java_path.exists() {
+        if java_path.is_file() {
             if let Ok(path) = check_java(&java_path, required_major) {
                 return Ok(path);
             }
@@ -115,7 +132,7 @@ pub(super) fn find_java(required_major: u32) -> Result<PathBuf, String> {
     }
 
     Err(format!(
-        "Keine passende Java-Version gefunden. Minecraft benötigt Java {}. Bitte installiere eine passende Java-Version und setze JAVA_HOME oder ergänze Java zum PATH.",
+        "Keine passende System-Java-Version {} gefunden.",
         required_major
     ))
 }

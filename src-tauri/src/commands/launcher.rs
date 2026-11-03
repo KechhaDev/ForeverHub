@@ -96,7 +96,7 @@ pub(crate) async fn launch_game(
         &profile.minecraft_version,
         fabric_enabled,
         &session,
-    )?;
+    ).await?;
 
     println!(
         "Minecraft-Prozess gestartet. PID: {}",

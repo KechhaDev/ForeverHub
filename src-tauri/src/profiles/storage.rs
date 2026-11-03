@@ -1,4 +1,3 @@
-
 use std::path::PathBuf;
 
 use super::AuthenticationMode;
@@ -21,6 +20,25 @@ fn get_foreverhub_dir() -> Option<PathBuf> {
     std::fs::create_dir_all(&foreverhub_dir).ok()?;
 
     Some(foreverhub_dir)
+}
+
+pub(crate) fn get_runtimes_dir() -> Result<PathBuf, String> {
+    let base_dir = get_foreverhub_dir()
+        .ok_or_else(|| {
+            "ForeverHub-Speicherverzeichnis ist nicht verfügbar.".to_string()
+        })?;
+
+    let runtimes_dir = base_dir.join("runtimes");
+
+    std::fs::create_dir_all(&runtimes_dir)
+        .map_err(|error| {
+            format!(
+                "Java-Runtime-Verzeichnis konnte nicht erstellt werden: {}",
+                error
+            )
+        })?;
+
+    Ok(runtimes_dir)
 }
 
 // ============================================================
@@ -68,7 +86,7 @@ fn get_profiles() -> Vec<Profile> {
             modpack_id: Some("NewCraft".to_string()),
             modpack_version: "1.0.0".to_string(),
             authentication_mode: AuthenticationMode::Offline,
-            install_dir: PathBuf::new(),
+            install_dir: installations_dir.join("NewCraft"),
         },
     ]
 }
@@ -162,7 +180,6 @@ fn initialize_profiles() -> bool {
 
             existing_profile.modpack_id =
                 default_profile.modpack_id;
-
         } else {
             profiles.push(default_profile);
         }
@@ -219,7 +236,6 @@ pub(crate) fn update_modpack_version(
     Ok(())
 }
 
-
 // ============================================================
 // UPDATE PROFILE METADATA
 // ============================================================
@@ -254,7 +270,6 @@ pub(crate) fn update_profile_metadata(
 
     Ok(())
 }
-
 
 // ============================================================
 // LIST PROFILES
@@ -315,6 +330,7 @@ pub(crate) fn setup_directories() -> bool {
         "installations",
         "logs",
         "launcher",
+        "runtimes",
     ];
 
     for directory in directories {

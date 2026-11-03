@@ -1,11 +1,9 @@
-
 mod metadata;
 mod java;
+mod java_runtime;
 mod libraries;
 mod arguments;
 mod process;
-
-use self::java::find_java;
 
 use self::metadata::{
     find_fabric_metadata,
@@ -31,7 +29,7 @@ use crate::account::LaunchSession;
 // GAME START
 // ============================================================
 
-pub fn start_game(
+pub async fn start_game(
     profile_dir: &Path,
     minecraft_version: &str,
     fabric_enabled: bool,
@@ -63,8 +61,6 @@ pub fn start_game(
         None
     };
 
-    // Fabric supplies its own main class and additional
-    // libraries and arguments.
     let launch_metadata = fabric_metadata
         .as_ref()
         .unwrap_or(&base_metadata);
@@ -123,7 +119,7 @@ pub fn start_game(
     };
 
     // --------------------------------------------------------
-    // JAVA VERSION
+    // REQUIRED JAVA VERSION
     // --------------------------------------------------------
 
     let required_java = fabric_metadata
@@ -136,7 +132,11 @@ pub fn start_game(
         })
         .unwrap_or(8) as u32;
 
-    let java = find_java(required_java)?;
+    // --------------------------------------------------------
+    // ENSURE JAVA RUNTIME
+    // --------------------------------------------------------
+
+    let java = java_runtime::ensure_java(required_java).await?;
 
     // --------------------------------------------------------
     // JVM ARGUMENTS
@@ -183,6 +183,7 @@ pub fn start_game(
     // --------------------------------------------------------
 
     println!("Java: {:?}", java);
+    println!("Java-Version: {}", required_java);
     println!("Main-Class: {}", main_class);
     println!("Minecraft-Version: {}", minecraft_version);
     println!("Launch-Version: {}", version_id);
