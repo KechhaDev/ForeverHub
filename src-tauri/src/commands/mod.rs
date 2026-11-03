@@ -1,6 +1,7 @@
-
 pub(crate) mod auth;
+pub(crate) mod github;
 pub(crate) mod launcher;
+pub(crate) mod profiles;
 
 use std::sync::Mutex;
 

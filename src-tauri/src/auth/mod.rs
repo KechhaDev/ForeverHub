@@ -3,6 +3,7 @@ mod microsoft;
 mod xbox;
 mod minecraft;
 mod models;
+mod token_storage;
 
 use serde_json::json;
 use tauri::Emitter;
@@ -12,6 +13,9 @@ use crate::account::LaunchSession;
 use self::microsoft::{
     request_device_code,
     poll_for_microsoft_token,
+    refresh_microsoft_token,
+    MicrosoftTokenResponse,
+    MicrosoftRefreshError,
 };
 
 use self::xbox::{
@@ -68,12 +72,98 @@ pub async fn login(
     )
     .await?;
 
+    // 4. Save the refresh token securely.
+    let refresh_token = microsoft_token.refresh_token
+        .as_deref()
+        .ok_or(
+            "Microsoft hat keinen Refresh Token geliefert."
+        )?;
+
+    token_storage::save_refresh_token(refresh_token)?;
+
     println!("Microsoft-Anmeldung erfolgreich.");
 
-    // 4. Authenticate with Xbox Live.
-    let xbox_response = authenticate_xbox(
+    // 5. Continue with Xbox and Minecraft authentication.
+    authenticate_account(&client, microsoft_token).await
+}
+
+// ============================================================
+// RESTORE SESSION
+// ============================================================
+
+
+pub async fn restore_login(
+) -> Result<Option<(LaunchSession, AccountInfo)>, String> {
+    let Some(refresh_token) = token_storage::load_refresh_token()? else {
+        println!("Kein gespeicherter Microsoft-Login vorhanden.");
+        return Ok(None);
+    };
+
+    println!("Stelle Microsoft-Sitzung wieder her...");
+
+    let client = reqwest::Client::new();
+
+    // 1. Microsoft-Token erneuern.
+    let microsoft_token = match refresh_microsoft_token(
         &client,
-        &microsoft_token,
+        &refresh_token,
+    ).await {
+        Ok(token) => token,
+
+        Err(MicrosoftRefreshError::Network(error)) => {
+            return Err(format!(
+                "Keine Verbindung zu Microsoft. Deine gespeicherte Anmeldung bleibt erhalten. {}",
+                error
+            ));
+        }
+
+        Err(MicrosoftRefreshError::InvalidToken(error)) => {
+            token_storage::delete_refresh_token()?;
+
+            return Err(format!(
+                "Deine Microsoft-Anmeldung ist nicht mehr gültig. Bitte melde dich erneut an. {}",
+                error
+            ));
+        }
+
+        Err(MicrosoftRefreshError::Other(error)) => {
+            return Err(format!(
+                "Microsoft-Anmeldung konnte nicht wiederhergestellt werden: {}",
+                error
+            ));
+        }
+    };
+
+    // 2. Rotierten Refresh Token speichern.
+    if let Some(new_refresh_token) = &microsoft_token.refresh_token {
+        token_storage::save_refresh_token(new_refresh_token)?;
+    }
+
+    println!("Microsoft-Sitzung erfolgreich erneuert.");
+
+    // 3. Xbox Live, XSTS und Minecraft authentifizieren.
+    let result = authenticate_account(
+        &client,
+        microsoft_token,
+    )
+    .await?;
+
+    Ok(Some(result))
+}
+
+
+// ============================================================
+// SHARED ACCOUNT AUTHENTICATION
+// ============================================================
+
+async fn authenticate_account(
+    client: &reqwest::Client,
+    microsoft_token: MicrosoftTokenResponse,
+) -> Result<(LaunchSession, AccountInfo), String> {
+    // 1. Authenticate with Xbox Live.
+    let xbox_response = authenticate_xbox(
+        client,
+        &microsoft_token.access_token,
     )
     .await?;
 
@@ -87,9 +177,9 @@ pub async fn login(
 
     println!("Xbox Live-Anmeldung erfolgreich.");
 
-    // 5. Authenticate with XSTS.
+    // 2. Authenticate with XSTS.
     let xsts_response = authenticate_xsts(
-        &client,
+        client,
         &xbox_response.token,
     )
     .await?;
@@ -111,9 +201,9 @@ pub async fn login(
 
     println!("XSTS-Anmeldung erfolgreich.");
 
-    // 6. Exchange XSTS token for a Minecraft token.
+    // 3. Exchange XSTS token for a Minecraft token.
     let minecraft_token = authenticate_minecraft(
-        &client,
+        client,
         &user_hash,
         &xsts_response.token,
     )
@@ -121,9 +211,9 @@ pub async fn login(
 
     println!("Minecraft-Authentifizierung erfolgreich.");
 
-    // 7. Fetch the actual Minecraft Java profile.
+    // 4. Fetch the actual Minecraft Java profile.
     let account = fetch_minecraft_profile(
-        &client,
+        client,
         &minecraft_token,
     )
     .await?;
@@ -133,7 +223,7 @@ pub async fn login(
         account.username
     );
 
-    // 8. Create the session used by the launcher.
+    // 5. Create the session used by the launcher.
     let session = LaunchSession {
         username: account.username.clone(),
         uuid: account.uuid.clone(),
@@ -144,4 +234,12 @@ pub async fn login(
     };
 
     Ok((session, account))
+}
+
+// ============================================================
+// LOGOUT
+// ============================================================
+
+pub fn logout() -> Result<(), String> {
+    token_storage::delete_refresh_token()
 }

@@ -53,6 +53,8 @@ pub(crate) async fn launch_game(
     // PREPARE INSTALLATION
     // --------------------------------------------------------
 
+    println!("Bereite Minecraft-Installation vor.");
+
     prepare_installation(&profile).await?;
 
     // --------------------------------------------------------
@@ -64,8 +66,30 @@ pub(crate) async fn launch_game(
             && !profile.fabric_version.trim().is_empty();
 
     // --------------------------------------------------------
+    // SYNCHRONIZE MODPACK
+    // --------------------------------------------------------
+
+    if fabric_enabled {
+        println!("Synchronisiere ForeverWorld-Modpack.");
+
+        let result =
+            crate::commands::github::synchronize_profile(&profile).await?;
+
+        println!(
+            "Modpack {} Version {} synchronisiert. \
+             {} Dateien heruntergeladen, {} bereits aktuell.",
+            result.modpack_name,
+            result.modpack_version,
+            result.downloaded_files,
+            result.up_to_date_files,
+        );
+    }
+
+    // --------------------------------------------------------
     // START GAME
     // --------------------------------------------------------
+
+    println!("Starte Minecraft.");
 
     let child = launcher::start_game(
         &profile.install_dir,

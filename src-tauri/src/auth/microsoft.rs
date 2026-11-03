@@ -33,8 +33,11 @@ fn default_poll_interval() -> u64 {
 }
 
 #[derive(Debug, Deserialize)]
-struct MicrosoftTokenResponse {
-    access_token: String,
+pub(super) struct MicrosoftTokenResponse {
+    pub(super) access_token: String,
+
+    #[serde(default)]
+    pub(super) refresh_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,9 +97,8 @@ pub(super) async fn request_device_code(
 pub(super) async fn poll_for_microsoft_token(
     client: &reqwest::Client,
     device: &DeviceCodeResponse,
-) -> Result<String, String> {
+) -> Result<MicrosoftTokenResponse, String> {
     let start_time = std::time::Instant::now();
-
     let mut interval = device.interval.max(1);
 
     loop {
@@ -133,28 +135,22 @@ pub(super) async fn poll_for_microsoft_token(
             .map_err(|error| error.to_string())?;
 
         if status.is_success() {
-            let token = serde_json::from_str::<MicrosoftTokenResponse>(
-                &body
-            )
-            .map_err(|error| {
-                format!(
-                    "Microsoft-Token konnte nicht gelesen werden: {}",
-                    error
-                )
-            })?;
-
-            return Ok(token.access_token);
+            return serde_json::from_str::<MicrosoftTokenResponse>(&body)
+                .map_err(|error| {
+                    format!(
+                        "Microsoft-Token konnte nicht gelesen werden: {}",
+                        error
+                    )
+                });
         }
 
-        let error = serde_json::from_str::<MicrosoftTokenError>(
-            &body
-        )
-        .map_err(|_| {
-            format!(
-                "Unbekannter Microsoft-Fehler: HTTP {}",
-                status
-            )
-        })?;
+        let error = serde_json::from_str::<MicrosoftTokenError>(&body)
+            .map_err(|_| {
+                format!(
+                    "Unbekannter Microsoft-Fehler: HTTP {}",
+                    status
+                )
+            })?;
 
         match error.error.as_str() {
             "authorization_pending" => {}
@@ -194,3 +190,83 @@ pub(super) async fn poll_for_microsoft_token(
         }
     }
 }
+
+// ============================================================
+// REFRESH TOKEN FLOW
+// ============================================================
+#[derive(Debug)]
+pub(super) enum MicrosoftRefreshError {
+    Network(String),
+    InvalidToken(String),
+    Other(String),
+}
+
+pub(super) async fn refresh_microsoft_token(
+    client: &reqwest::Client,
+    refresh_token: &str,
+) -> Result<MicrosoftTokenResponse, MicrosoftRefreshError> {
+    let response = client
+        .post(TOKEN_URL)
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("client_id", MICROSOFT_CLIENT_ID),
+            ("refresh_token", refresh_token),
+            ("scope", "XboxLive.signin offline_access"),
+        ])
+        .send()
+        .await
+        .map_err(|error| {
+            MicrosoftRefreshError::Network(format!(
+                "Microsoft konnte nicht erreicht werden: {}",
+                error
+            ))
+        })?;
+
+    let status = response.status();
+
+    let body = response
+        .text()
+        .await
+        .map_err(|error| {
+            MicrosoftRefreshError::Network(format!(
+                "Microsoft-Antwort konnte nicht gelesen werden: {}",
+                error
+            ))
+        })?;
+
+    if !status.is_success() {
+        let error = serde_json::from_str::<MicrosoftTokenError>(&body)
+            .map_err(|_| {
+                MicrosoftRefreshError::Other(format!(
+                    "Microsoft-Token-Erneuerung fehlgeschlagen: HTTP {}",
+                    status
+                ))
+            })?;
+
+        if matches!(
+            error.error.as_str(),
+            "invalid_grant" | "invalid_request"
+        ) {
+            return Err(MicrosoftRefreshError::InvalidToken(format!(
+                "{} ({})",
+                error.error,
+                error.error_description
+            )));
+        }
+
+        return Err(MicrosoftRefreshError::Other(format!(
+            "{} ({})",
+            error.error,
+            error.error_description
+        )));
+    }
+
+    serde_json::from_str::<MicrosoftTokenResponse>(&body)
+        .map_err(|error| {
+            MicrosoftRefreshError::Other(format!(
+                "Erneuertes Microsoft-Token konnte nicht gelesen werden: {}",
+                error
+            ))
+        })
+}
+

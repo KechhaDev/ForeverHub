@@ -1,7 +1,8 @@
+
 use std::path::PathBuf;
 
-use super::Profile;
 use super::AuthenticationMode;
+use super::Profile;
 
 // ============================================================
 // STORAGE DIRECTORIES
@@ -37,6 +38,7 @@ fn get_profiles() -> Vec<Profile> {
             name: "Vanilla".to_string(),
             minecraft_version: "26.3".to_string(),
             fabric_version: "/".to_string(),
+            modpack_id: None,
             modpack_version: "Vanilla".to_string(),
             install_dir: installations_dir.join("Vanilla"),
             authentication_mode: AuthenticationMode::Microsoft,
@@ -45,6 +47,7 @@ fn get_profiles() -> Vec<Profile> {
             name: "ForeverWorld".to_string(),
             minecraft_version: "26.3".to_string(),
             fabric_version: "0.19.5".to_string(),
+            modpack_id: Some("ForeverWorld".to_string()),
             modpack_version: "1.0.0".to_string(),
             install_dir: installations_dir.join("ForeverWorld"),
             authentication_mode: AuthenticationMode::Microsoft,
@@ -53,21 +56,39 @@ fn get_profiles() -> Vec<Profile> {
             name: "ForeverWorld-DEVELOPMENT".to_string(),
             minecraft_version: "26.3".to_string(),
             fabric_version: "0.19.5".to_string(),
+            modpack_id: Some("ForeverWorldDev".to_string()),
             modpack_version: "1.0.1-dev".to_string(),
             install_dir: installations_dir.join("ForeverWorld-DEVELOPMENT"),
             authentication_mode: AuthenticationMode::Offline,
         },
+        Profile {
+            name: "NewCraft".to_string(),
+            minecraft_version: "26.3".to_string(),
+            fabric_version: "0.19.5".to_string(),
+            modpack_id: Some("NewCraft".to_string()),
+            modpack_version: "1.0.0".to_string(),
+            authentication_mode: AuthenticationMode::Offline,
+            install_dir: PathBuf::new(),
+        },
     ]
 }
+
+// ============================================================
+// SAVE PROFILES
+// ============================================================
 
 fn save_profiles(profiles: &[Profile]) -> bool {
     let Some(base_dir) = get_foreverhub_dir() else {
         return false;
     };
 
-    let profiles_file = base_dir
-        .join("launcher")
-        .join("profiles.json");
+    let profiles_dir = base_dir.join("launcher");
+
+    if std::fs::create_dir_all(&profiles_dir).is_err() {
+        return false;
+    }
+
+    let profiles_file = profiles_dir.join("profiles.json");
 
     let json = match serde_json::to_string_pretty(profiles) {
         Ok(json) => json,
@@ -76,6 +97,10 @@ fn save_profiles(profiles: &[Profile]) -> bool {
 
     std::fs::write(profiles_file, json).is_ok()
 }
+
+// ============================================================
+// LOAD PROFILES
+// ============================================================
 
 fn load_profiles() -> Option<Vec<Profile>> {
     let base_dir = get_foreverhub_dir()?;
@@ -103,7 +128,9 @@ fn load_profiles_with_paths() -> Option<Vec<Profile>> {
     Some(profiles)
 }
 
-
+// ============================================================
+// INITIALIZE PROFILES
+// ============================================================
 
 fn initialize_profiles() -> bool {
     let Some(base_dir) = get_foreverhub_dir() else {
@@ -132,6 +159,10 @@ fn initialize_profiles() -> bool {
         {
             existing_profile.authentication_mode =
                 default_profile.authentication_mode;
+
+            existing_profile.modpack_id =
+                default_profile.modpack_id;
+
         } else {
             profiles.push(default_profile);
         }
@@ -140,14 +171,97 @@ fn initialize_profiles() -> bool {
     save_profiles(&profiles)
 }
 
+// ============================================================
+// FIND PROFILE
+// ============================================================
 
-
-pub(crate) fn find_profile(profile_name: &str) -> Option<Profile> {
+pub(crate) fn find_profile(
+    profile_name: &str,
+) -> Option<Profile> {
     let profiles = load_profiles_with_paths()?;
 
     profiles
         .into_iter()
         .find(|profile| profile.name == profile_name)
+}
+
+// ============================================================
+// UPDATE MODPACK VERSION
+// ============================================================
+
+pub(crate) fn update_modpack_version(
+    profile_name: &str,
+    modpack_version: &str,
+) -> Result<(), String> {
+    let mut profiles = load_profiles()
+        .ok_or_else(|| {
+            "Profile konnten nicht geladen werden.".to_string()
+        })?;
+
+    let profile = profiles
+        .iter_mut()
+        .find(|profile| profile.name == profile_name)
+        .ok_or_else(|| {
+            format!(
+                "Profil {} wurde nicht gefunden.",
+                profile_name
+            )
+        })?;
+
+    profile.modpack_version = modpack_version.to_string();
+
+    if !save_profiles(&profiles) {
+        return Err(
+            "Modpack-Version konnte nicht gespeichert werden.".to_string()
+        );
+    }
+
+    Ok(())
+}
+
+
+// ============================================================
+// UPDATE PROFILE METADATA
+// ============================================================
+
+pub(crate) fn update_profile_metadata(
+    profile_name: &str,
+    minecraft_version: &str,
+    fabric_version: &str,
+    modpack_version: &str,
+) -> Result<(), String> {
+    let mut profiles = load_profiles()
+        .ok_or_else(|| {
+            "Profile konnten nicht geladen werden.".to_string()
+        })?;
+
+    let profile = profiles
+        .iter_mut()
+        .find(|profile| profile.name == profile_name)
+        .ok_or_else(|| {
+            format!("Profil {} wurde nicht gefunden.", profile_name)
+        })?;
+
+    profile.minecraft_version = minecraft_version.to_string();
+    profile.fabric_version = fabric_version.to_string();
+    profile.modpack_version = modpack_version.to_string();
+
+    if !save_profiles(&profiles) {
+        return Err(
+            "Profil-Metadaten konnten nicht gespeichert werden.".to_string()
+        );
+    }
+
+    Ok(())
+}
+
+
+// ============================================================
+// LIST PROFILES
+// ============================================================
+
+pub(crate) fn list_profiles() -> Option<Vec<Profile>> {
+    load_profiles_with_paths()
 }
 
 // ============================================================

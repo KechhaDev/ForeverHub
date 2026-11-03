@@ -19,8 +19,11 @@ impl Default for AuthenticationMode {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Profile {
     pub(crate) name: String,
+
     pub(crate) minecraft_version: String,
     pub(crate) fabric_version: String,
+
+    pub(crate) modpack_id: Option<String>,
     pub(crate) modpack_version: String,
 
     #[serde(default)]

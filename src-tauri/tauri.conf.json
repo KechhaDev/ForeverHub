@@ -1,3 +1,4 @@
+
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ForeverHub",
@@ -26,6 +27,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -35,6 +37,17 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaW5nIHB1YmxpYyBrZXk6IDMwQTFCQzg3RUE0NENCRjQKUldUMHkwVHFoN3loTUU5d25IVEF2Sk9TVEl4czZmUUxmM2NzVWtrZkpuRFpuY2FtZzl1bXVkRzYK",
+      "endpoints": [
+        "https://github.com/KechhaDev/ForeverHub/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

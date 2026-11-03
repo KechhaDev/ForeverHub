@@ -115,9 +115,18 @@ pub(super) async fn fetch_minecraft_profile(
             format!("Minecraft-Profilantwort ungültig: {}", error)
         })?;
 
+    // Aktiven Skin bevorzugen, ansonsten den ersten verfügbaren Skin.
+    let skin_url = profile
+        .skins
+        .iter()
+        .find(|skin| skin.state == "ACTIVE")
+        .or_else(|| profile.skins.first())
+        .map(|skin| skin.url.clone());
+
     Ok(AccountInfo {
         username: profile.name,
         uuid: profile.id,
+        skin_url,
     })
 }
 
@@ -129,4 +138,15 @@ pub(super) async fn fetch_minecraft_profile(
 struct MinecraftProfileResponse {
     name: String,
     id: String,
+
+    #[serde(default)]
+    skins: Vec<MinecraftSkin>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MinecraftSkin {
+    #[serde(default)]
+    state: String,
+
+    url: String,
 }

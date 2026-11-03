@@ -60,3 +60,13 @@ Desktop.ini
 *.tmp
 *.bak
 *.old
+
+
+# Tauri updater signing keys
+*.key
+*.key.pub
+
+# Local environment files
+.env
+.env.*
+!.env.example
