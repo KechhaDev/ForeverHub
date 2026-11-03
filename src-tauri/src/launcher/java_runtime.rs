@@ -1,3 +1,4 @@
+
 use std::fs::{self, File};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -17,7 +18,7 @@ const ADOPTIUM_API: &str =
 
 #[derive(Deserialize)]
 struct AdoptiumAsset {
-    binaries: Vec<AdoptiumBinary>,
+    binary: AdoptiumBinary,
 }
 
 #[derive(Deserialize)]
@@ -47,9 +48,7 @@ fn java_executable_name() -> &'static str {
 // FIND JAVA HOME
 // ============================================================
 
-fn find_java_home(
-    directory: &Path,
-) -> Option<PathBuf> {
+fn find_java_home(directory: &Path) -> Option<PathBuf> {
     let direct_executable =
         directory.join("bin").join(java_executable_name());
 
@@ -112,28 +111,40 @@ async fn fetch_runtime_package(
             )
         })?;
 
-    if !response.status().is_success() {
-        return Err(format!(
-            "Temurin-API antwortete mit HTTP {}.",
-            response.status()
-        ));
-    }
+    let status = response.status();
 
-    let assets = response
-        .json::<Vec<AdoptiumAsset>>()
+    let body = response
+        .text()
         .await
         .map_err(|error| {
             format!(
-                "Java-Informationen sind ungültig: {}",
+                "Java-Antwort konnte nicht gelesen werden: {}",
                 error
             )
         })?;
 
+    if !status.is_success() {
+        return Err(format!(
+            "Temurin-API antwortete mit HTTP {}: {}",
+            status,
+            body.chars().take(1000).collect::<String>()
+        ));
+    }
+
+    let assets: Vec<AdoptiumAsset> =
+        serde_json::from_str(&body)
+            .map_err(|error| {
+                format!(
+                    "Java-JSON konnte nicht verarbeitet werden: {}. API-Antwort: {}",
+                    error,
+                    body.chars().take(1500).collect::<String>()
+                )
+            })?;
+
     let package = assets
         .into_iter()
         .next()
-        .and_then(|asset| asset.binaries.into_iter().next())
-        .map(|binary| binary.package)
+        .map(|asset| asset.binary.package)
         .ok_or_else(|| {
             format!(
                 "Für Java {} wurde keine passende Windows-JRE gefunden.",
@@ -240,7 +251,12 @@ fn extract_runtime(
 
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| {
+                    format!(
+                        "Java-Verzeichnis konnte nicht erstellt werden: {}",
+                        error
+                    )
+                })?;
         }
 
         let mut output = File::create(&destination)

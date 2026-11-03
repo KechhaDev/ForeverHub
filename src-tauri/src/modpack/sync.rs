@@ -75,6 +75,165 @@ pub(crate) fn mark_initial_install_complete(
 }
 
 // ============================================================
+// CONFIG IMPORT STATE
+// ============================================================
+
+fn config_import_marker(install_dir: &Path, name: &str) -> PathBuf {
+    install_dir.join(".foreverhub").join(name)
+}
+
+fn has_existing_config_files(directory: &Path) -> Result<bool, String> {
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(false);
+        }
+        Err(error) => {
+            return Err(format!(
+                "Config-Verzeichnis konnte nicht gelesen werden: {}",
+                error
+            ));
+        }
+    };
+
+    for entry in entries {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| {
+            format!("Config-Eintrag konnte nicht überprüft werden: {}", error)
+        })?;
+
+        // Regular files and symlinks count as existing configs.
+        if file_type.is_file() || file_type.is_symlink() {
+            return Ok(true);
+        }
+
+        // Search subdirectories recursively.
+        if file_type.is_dir()
+            && has_existing_config_files(&entry.path())?
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+// Decide once whether this installation should receive default configs.
+pub(crate) fn should_import_configs(
+    install_dir: &Path,
+) -> Result<bool, String> {
+    let complete = config_import_marker(
+        install_dir,
+        "config-import-complete",
+    );
+
+    let skipped = config_import_marker(
+        install_dir,
+        "config-import-skipped",
+    );
+
+    let in_progress = config_import_marker(
+        install_dir,
+        "config-import-in-progress",
+    );
+
+    // A completed or deliberately skipped import is never repeated.
+    if complete.exists() || skipped.exists() {
+        return Ok(false);
+    }
+
+    // An interrupted import must be resumed, not reclassified.
+    if in_progress.exists() {
+        return Ok(true);
+    }
+
+    // Empty directories do not count as existing user configs.
+    let config_dir = install_dir.join("config");
+
+    if has_existing_config_files(&config_dir)? {
+        let parent = skipped.parent().ok_or_else(|| {
+            "Ungültiger Config-Import-Pfad.".to_string()
+        })?;
+
+        std::fs::create_dir_all(parent)
+            .map_err(|error| error.to_string())?;
+
+        std::fs::write(&skipped, b"skipped")
+            .map_err(|error| {
+                format!(
+                    "Config-Import-Status konnte nicht gespeichert werden: {}",
+                    error
+                )
+            })?;
+
+        println!(
+            "[Modpack] Vorhandene Configs erkannt. Standardconfigs werden nicht importiert."
+        );
+
+        return Ok(false);
+    }
+
+    // Persist the decision BEFORE downloading anything.
+    let parent = in_progress.parent().ok_or_else(|| {
+        "Ungültiger Config-Import-Pfad.".to_string()
+    })?;
+
+    std::fs::create_dir_all(parent)
+        .map_err(|error| error.to_string())?;
+
+    std::fs::write(&in_progress, b"in-progress")
+        .map_err(|error| {
+            format!(
+                "Config-Import konnte nicht vorbereitet werden: {}",
+                error
+            )
+        })?;
+
+    println!(
+        "[Modpack] Keine vorhandenen Config-Dateien. Standardconfigs werden importiert."
+    );
+
+    Ok(true)
+}
+
+// Mark the import complete only after the entire synchronization succeeds.
+pub(crate) fn mark_config_import_complete(
+    install_dir: &Path,
+) -> Result<(), String> {
+    let complete = config_import_marker(
+        install_dir,
+        "config-import-complete",
+    );
+
+    let in_progress = config_import_marker(
+        install_dir,
+        "config-import-in-progress",
+    );
+
+    std::fs::write(&complete, b"complete")
+        .map_err(|error| {
+            format!(
+                "Config-Import konnte nicht abgeschlossen werden: {}",
+                error
+            )
+        })?;
+
+    if in_progress.exists() {
+        std::fs::remove_file(&in_progress)
+            .map_err(|error| {
+                format!(
+                    "Config-Import-Status konnte nicht bereinigt werden: {}",
+                    error
+                )
+            })?;
+    }
+
+    println!("[Modpack] Config-Import abgeschlossen.");
+
+    Ok(())
+}
+
+// ============================================================
 // SYNC PLAN
 // ============================================================
 
@@ -139,36 +298,35 @@ fn verify_file(
 pub(crate) fn create_sync_plan(
     manifest: &ModpackManifest,
     install_dir: &Path,
+    import_configs: bool,
 ) -> Result<SyncPlan, String> {
     let mut plan = SyncPlan {
         files_to_download: Vec::new(),
         files_up_to_date: Vec::new(),
     };
 
-    let initial_install_complete =
-        is_initial_install_complete(install_dir)?;
-
     for file in &manifest.files {
         manifest::validate_file(file)?;
 
         let local_path = install_dir.join(&file.path);
 
-        // Config files are only installed during the first
-        // successful installation. Existing files are never
-        // overwritten, even during the initial installation.
         if is_config_file(&file.path) {
-            if initial_install_complete {
+            // Config import was previously completed or skipped.
+            if !import_configs {
                 plan.files_up_to_date.push(file.path.clone());
                 continue;
             }
 
+            // Never overwrite an existing config file.
             match std::fs::symlink_metadata(&local_path) {
                 Ok(_) => {
                     plan.files_up_to_date.push(file.path.clone());
                     continue;
                 }
+
                 Err(error)
                     if error.kind() == std::io::ErrorKind::NotFound => {}
+
                 Err(error) => {
                     return Err(format!(
                         "Config-Datei konnte nicht überprüft werden ({}): {}",
@@ -177,6 +335,9 @@ pub(crate) fn create_sync_plan(
                     ));
                 }
             }
+
+            plan.files_to_download.push(file.path.clone());
+            continue;
         }
 
         let is_up_to_date = verify_file(

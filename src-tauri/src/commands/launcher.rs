@@ -50,14 +50,6 @@ pub(crate) async fn launch_game(
     };
 
     // --------------------------------------------------------
-    // PREPARE INSTALLATION
-    // --------------------------------------------------------
-
-    println!("Bereite Minecraft-Installation vor.");
-
-    prepare_installation(&profile).await?;
-
-    // --------------------------------------------------------
     // DETERMINE LOADER
     // --------------------------------------------------------
 
@@ -66,7 +58,7 @@ pub(crate) async fn launch_game(
             && !profile.fabric_version.trim().is_empty();
 
     // --------------------------------------------------------
-    // SYNCHRONIZE MODPACK
+    // SYNCHRONIZE MODPACK BEFORE INSTALLATION PREPARATION
     // --------------------------------------------------------
 
     if fabric_enabled {
@@ -86,6 +78,14 @@ pub(crate) async fn launch_game(
     }
 
     // --------------------------------------------------------
+    // PREPARE MINECRAFT INSTALLATION
+    // --------------------------------------------------------
+
+    println!("Bereite Minecraft-Installation vor.");
+
+    prepare_installation(&profile).await?;
+
+    // --------------------------------------------------------
     // START GAME
     // --------------------------------------------------------
 
@@ -95,6 +95,7 @@ pub(crate) async fn launch_game(
         &profile.install_dir,
         &profile.minecraft_version,
         fabric_enabled,
+        profile.ram_gb,
         &session,
     ).await?;
 

@@ -64,16 +64,34 @@ pub(crate) async fn synchronize_profile(
         ));
     }
 
-    // Create the synchronization plan.
+    // --------------------------------------------------------
+    // CONFIG IMPORT
+    // --------------------------------------------------------
+
+    // Decide whether default configs should be imported.
+    // This decision is stored separately from the initial
+    // installation marker.
+    let import_configs = sync::should_import_configs(
+        &profile.install_dir,
+    )?;
+
+    // --------------------------------------------------------
+    // CREATE SYNC PLAN
+    // --------------------------------------------------------
+
     let plan = sync::create_sync_plan(
         &manifest,
         &profile.install_dir,
+        import_configs,
     )?;
 
     let downloaded_files = plan.files_to_download.len();
     let up_to_date_files = plan.files_up_to_date.len();
 
-    // Download missing or outdated files.
+    // --------------------------------------------------------
+    // DOWNLOAD FILES
+    // --------------------------------------------------------
+
     sync::download_files(
         &github,
         &manifest,
@@ -82,6 +100,10 @@ pub(crate) async fn synchronize_profile(
         modpack_id,
     )
     .await?;
+
+    // --------------------------------------------------------
+    // INSTALL DEFAULT OPTIONS
+    // --------------------------------------------------------
 
     // Install default options.txt only if it does not exist.
     sync::install_default_options(
@@ -92,20 +114,40 @@ pub(crate) async fn synchronize_profile(
     )
     .await?;
 
-    // Remove obsolete managed files and update inventory.
+    // --------------------------------------------------------
+    // REMOVE OBSOLETE FILES
+    // --------------------------------------------------------
+
     let removed_files = sync::remove_obsolete_files(
         &manifest,
         &profile.install_dir,
     )?;
 
-    // Save the successfully installed modpack version.
+    // --------------------------------------------------------
+    // UPDATE MODPACK VERSION
+    // --------------------------------------------------------
+
     crate::profiles::update_modpack_version(
         &profile.name,
         &manifest.version,
     )?;
 
-    // Mark the initial installation as complete only after
-    // all synchronization steps have succeeded.
+    // --------------------------------------------------------
+    // COMPLETE CONFIG IMPORT
+    // --------------------------------------------------------
+
+    // Only mark the config import as complete after all
+    // synchronization steps have succeeded.
+    if import_configs {
+        sync::mark_config_import_complete(
+            &profile.install_dir,
+        )?;
+    }
+
+    // --------------------------------------------------------
+    // COMPLETE INITIAL INSTALLATION
+    // --------------------------------------------------------
+
     sync::mark_initial_install_complete(
         &profile.install_dir,
     )?;

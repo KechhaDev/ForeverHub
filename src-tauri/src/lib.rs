@@ -23,6 +23,7 @@ pub fn run() {
                 commands::auth::logout_microsoft,
                 commands::github::sync_modpack,
                 commands::profiles::get_profiles,
+                commands::profiles::update_profile_ram,
                 commands::profiles::refresh_profile_metadata,
             ]
         )

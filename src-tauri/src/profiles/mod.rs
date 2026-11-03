@@ -1,3 +1,4 @@
+
 mod model;
 mod storage;
 
@@ -11,6 +12,7 @@ pub(crate) use storage::{
     get_runtimes_dir,
     setup_directories,
     update_modpack_version,
-    list_profiles,
     update_profile_metadata,
+    update_profile_ram,
+    list_profiles,
 };

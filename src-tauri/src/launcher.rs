@@ -1,3 +1,4 @@
+
 mod metadata;
 mod java;
 mod java_runtime;
@@ -33,9 +34,17 @@ pub async fn start_game(
     profile_dir: &Path,
     minecraft_version: &str,
     fabric_enabled: bool,
+    ram_gb: u32,
     session: &LaunchSession,
 ) -> Result<Child, String> {
     println!("Erstelle Minecraft-Startkonfiguration...");
+
+    if !(2..=12).contains(&ram_gb) {
+        return Err(
+            "Die RAM-Einstellung muss zwischen 2 und 12 GB liegen."
+                .to_string()
+        );
+    }
 
     // --------------------------------------------------------
     // LOAD MINECRAFT METADATA
@@ -84,7 +93,6 @@ pub async fn start_game(
     // --------------------------------------------------------
 
     let assets_dir = profile_dir.join("assets");
-
     let libraries_dir = profile_dir.join("libraries");
 
     let natives_dir = profile_dir
@@ -158,6 +166,16 @@ pub async fn start_game(
         ));
     }
 
+    // Remove RAM arguments supplied by Minecraft or Fabric metadata.
+    arguments.retain(|argument| {
+        !argument.starts_with("-Xms")
+            && !argument.starts_with("-Xmx")
+    });
+
+    // Use a small initial heap and the selected maximum heap.
+    arguments.push("-Xms1G".to_string());
+    arguments.push(format!("-Xmx{}G", ram_gb));
+
     // --------------------------------------------------------
     // GAME ARGUMENTS
     // --------------------------------------------------------
@@ -184,6 +202,7 @@ pub async fn start_game(
 
     println!("Java: {:?}", java);
     println!("Java-Version: {}", required_java);
+    println!("RAM: {} GB", ram_gb);
     println!("Main-Class: {}", main_class);
     println!("Minecraft-Version: {}", minecraft_version);
     println!("Launch-Version: {}", version_id);

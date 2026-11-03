@@ -18,6 +18,7 @@ pub(crate) struct ProfileInfo {
     fabric_version: String,
     modpack_version: String,
     dev_mode: bool,
+    ram_gb: u32,
 }
 
 impl From<profiles::Profile> for ProfileInfo {
@@ -35,6 +36,7 @@ impl From<profiles::Profile> for ProfileInfo {
                 profile.authentication_mode,
                 AuthenticationMode::Offline
             ),
+            ram_gb: profile.ram_gb,
         }
     }
 }
@@ -51,6 +53,18 @@ pub(crate) fn get_profiles() -> Result<Vec<ProfileInfo>, String> {
         })?;
 
     Ok(profiles.into_iter().map(ProfileInfo::from).collect())
+}
+
+// ============================================================
+// UPDATE PROFILE RAM
+// ============================================================
+
+#[tauri::command]
+pub(crate) fn update_profile_ram(
+    profile_name: String,
+    ram_gb: u32,
+) -> Result<(), String> {
+    profiles::update_profile_ram(&profile_name, ram_gb)
 }
 
 // ============================================================

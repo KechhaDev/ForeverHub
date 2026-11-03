@@ -30,6 +30,7 @@ interface Profile {
   fabricVersion: string;
   modpackVersion: string;
   devMode: boolean;
+  ramGb: number;
 }
 
 const appWindow = getCurrentWindow();
@@ -297,6 +298,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
   // ============================================================
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isSavingRam, setIsSavingRam] = useState(false);
 
   const selectedProfileData = profiles.find(
     (profile) => profile.name === selectedProfile
@@ -320,6 +322,37 @@ const checkForUpdates = useCallback(async (manual = false) => {
     } catch (error) {
       console.error("Profile konnten nicht geladen werden:", error);
       setStatusMessage(String(error));
+    }
+  }
+
+  function handleRamSliderChange(ramGb: number) {
+    if (!selectedProfileData) return;
+
+    setProfiles((currentProfiles) =>
+      currentProfiles.map((profile) =>
+        profile.name === selectedProfileData.name
+          ? { ...profile, ramGb }
+          : profile
+      )
+    );
+  }
+
+  async function saveProfileRam(profileName: string, ramGb: number) {
+    setIsSavingRam(true);
+
+    try {
+      await invoke("update_profile_ram", {
+        profileName,
+        ramGb,
+      });
+
+      setStatusMessage(`RAM-Einstellung für ${profileName} gespeichert.`);
+    } catch (error) {
+      console.error("RAM-Einstellung konnte nicht gespeichert werden:", error);
+      setStatusMessage(`RAM-Einstellung konnte nicht gespeichert werden: ${String(error)}`);
+      await loadProfiles();
+    } finally {
+      setIsSavingRam(false);
     }
   }
 
@@ -902,6 +935,7 @@ const checkForUpdates = useCallback(async (manual = false) => {
             disabled={
               (!usesDevAuth && isRestoringSession) ||
               isLaunching ||
+              isSavingRam ||
               profiles.length === 0 ||
               (!usesDevAuth && !account)
             }
@@ -983,6 +1017,93 @@ const checkForUpdates = useCallback(async (manual = false) => {
             ))
           )}
         </div>
+
+        {/* RAM SETTINGS FOR THE SELECTED PROFILE */}
+
+        {selectedProfileData && (
+          <div
+            className="ram-control"
+            style={{
+              marginTop: "24px",
+              width: "100%",
+              maxWidth: "420px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "8px",
+              }}
+            >
+              <label
+                htmlFor="profile-ram-slider"
+                style={{ fontWeight: 600 }}
+              >
+                Zugewiesener Arbeitsspeicher
+              </label>
+
+              <strong aria-live="polite">
+                {selectedProfileData.ramGb ?? 4} GB
+              </strong>
+            </div>
+
+            <input
+              id="profile-ram-slider"
+              type="range"
+              min={2}
+              max={12}
+              step={1}
+              value={selectedProfileData.ramGb ?? 4}
+              onChange={(event) =>
+                handleRamSliderChange(Number(event.currentTarget.value))
+              }
+              onPointerUp={() => {
+                void saveProfileRam(
+                  selectedProfileData.name,
+                  selectedProfileData.ramGb ?? 4
+                );
+              }}
+              onKeyUp={() => {
+                void saveProfileRam(
+                  selectedProfileData.name,
+                  selectedProfileData.ramGb ?? 4
+                );
+              }}
+              disabled={isSavingRam || isLaunching}
+              aria-label="Minecraft-Arbeitsspeicher in Gigabyte"
+              aria-valuetext={`${selectedProfileData.ramGb ?? 4} Gigabyte`}
+              style={{ width: "100%", cursor: "pointer" }}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: "0.8rem",
+                opacity: 0.7,
+                marginTop: "4px",
+              }}
+            >
+              <span>2 GB</span>
+              <span>12 GB</span>
+            </div>
+
+            <p
+              style={{
+                marginTop: "8px",
+                fontSize: "0.85rem",
+                opacity: 0.75,
+              }}
+            >
+              {isSavingRam
+                ? "RAM-Einstellung wird gespeichert..."
+                : "Die Einstellung gilt nur für dieses Profil."}
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

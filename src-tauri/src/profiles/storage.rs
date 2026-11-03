@@ -1,7 +1,12 @@
+
 use std::path::PathBuf;
 
 use super::AuthenticationMode;
 use super::Profile;
+
+const MIN_RAM_GB: u32 = 2;
+const MAX_RAM_GB: u32 = 12;
+const DEFAULT_RAM_GB: u32 = 4;
 
 // ============================================================
 // STORAGE DIRECTORIES
@@ -60,6 +65,7 @@ fn get_profiles() -> Vec<Profile> {
             modpack_version: "Vanilla".to_string(),
             install_dir: installations_dir.join("Vanilla"),
             authentication_mode: AuthenticationMode::Microsoft,
+            ram_gb: DEFAULT_RAM_GB,
         },
         Profile {
             name: "ForeverWorld".to_string(),
@@ -69,6 +75,7 @@ fn get_profiles() -> Vec<Profile> {
             modpack_version: "1.0.0".to_string(),
             install_dir: installations_dir.join("ForeverWorld"),
             authentication_mode: AuthenticationMode::Microsoft,
+            ram_gb: DEFAULT_RAM_GB,
         },
         Profile {
             name: "ForeverWorld-DEVELOPMENT".to_string(),
@@ -78,6 +85,7 @@ fn get_profiles() -> Vec<Profile> {
             modpack_version: "1.0.1-dev".to_string(),
             install_dir: installations_dir.join("ForeverWorld-DEVELOPMENT"),
             authentication_mode: AuthenticationMode::Offline,
+            ram_gb: DEFAULT_RAM_GB,
         },
         Profile {
             name: "NewCraft".to_string(),
@@ -87,6 +95,7 @@ fn get_profiles() -> Vec<Profile> {
             modpack_version: "1.0.0".to_string(),
             authentication_mode: AuthenticationMode::Offline,
             install_dir: installations_dir.join("NewCraft"),
+            ram_gb: DEFAULT_RAM_GB,
         },
     ]
 }
@@ -200,6 +209,45 @@ pub(crate) fn find_profile(
     profiles
         .into_iter()
         .find(|profile| profile.name == profile_name)
+}
+
+// ============================================================
+// UPDATE PROFILE RAM
+// ============================================================
+
+pub(crate) fn update_profile_ram(
+    profile_name: &str,
+    ram_gb: u32,
+) -> Result<(), String> {
+    if !(MIN_RAM_GB..=MAX_RAM_GB).contains(&ram_gb) {
+        return Err(format!(
+            "RAM muss zwischen {} und {} GB liegen.",
+            MIN_RAM_GB,
+            MAX_RAM_GB
+        ));
+    }
+
+    let mut profiles = load_profiles()
+        .ok_or_else(|| {
+            "Profile konnten nicht geladen werden.".to_string()
+        })?;
+
+    let profile = profiles
+        .iter_mut()
+        .find(|profile| profile.name == profile_name)
+        .ok_or_else(|| {
+            format!("Profil {} wurde nicht gefunden.", profile_name)
+        })?;
+
+    profile.ram_gb = ram_gb;
+
+    if !save_profiles(&profiles) {
+        return Err(
+            "RAM-Einstellung konnte nicht gespeichert werden.".to_string()
+        );
+    }
+
+    Ok(())
 }
 
 // ============================================================

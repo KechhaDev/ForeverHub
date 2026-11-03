@@ -16,6 +16,10 @@ impl Default for AuthenticationMode {
     }
 }
 
+fn default_ram_gb() -> u32 {
+    4
+}
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Profile {
     pub(crate) name: String,
@@ -28,6 +32,9 @@ pub(crate) struct Profile {
 
     #[serde(default)]
     pub(crate) authentication_mode: AuthenticationMode,
+
+    #[serde(default = "default_ram_gb")]
+    pub(crate) ram_gb: u32,
 
     #[serde(skip)]
     pub(crate) install_dir: PathBuf,
