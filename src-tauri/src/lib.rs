@@ -25,6 +25,7 @@ pub fn run() {
                 commands::profiles::get_profiles,
                 commands::profiles::update_profile_ram,
                 commands::profiles::refresh_profile_metadata,
+                commands::storage::get_data_directory,
             ]
         )
         .setup(|app| {

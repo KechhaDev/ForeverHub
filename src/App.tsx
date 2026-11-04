@@ -1,6 +1,5 @@
-
 import "./App.css";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -62,19 +61,14 @@ function getLauncherStageLabel(stage: LauncherStage): string {
   switch (stage) {
     case "syncing":
       return "Modpack-Synchronisierung";
-
     case "preparing":
       return "Installation wird vorbereitet";
-
     case "starting":
       return "Minecraft wird gestartet";
-
     case "running":
       return "Minecraft läuft";
-
     case "stopped":
       return "Minecraft beendet";
-
     case "error":
       return "Fehler";
   }
@@ -84,19 +78,14 @@ function getLauncherStageIcon(stage: LauncherStage): string {
   switch (stage) {
     case "syncing":
       return "↻";
-
     case "preparing":
       return "⚙";
-
     case "starting":
       return "▶";
-
     case "running":
       return "●";
-
     case "stopped":
       return "✓";
-
     case "error":
       return "!";
   }
@@ -372,6 +361,27 @@ function App() {
       );
 
       setIsInstallingUpdate(false);
+    }
+  }
+
+  // ============================================================
+  // DATA DIRECTORY
+  // ============================================================
+
+  async function openDataDirectory() {
+    try {
+      const path = await invoke<string>("get_data_directory");
+      await openPath(path);
+    } catch (error) {
+      console.error(
+        "ForeverHub-Verzeichnis konnte nicht geöffnet werden:",
+        error
+      );
+
+      setStatusMessage(
+        "ForeverHub-Verzeichnis konnte nicht geöffnet werden: " +
+          String(error)
+      );
     }
   }
 
@@ -789,6 +799,26 @@ function App() {
         </div>
 
         <div className="header-update">
+          <button
+            className="directory-button"
+            onClick={() => void openDataDirectory()}
+            title="ForeverHub-Verzeichnis öffnen"
+            aria-label="ForeverHub-Verzeichnis öffnen"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+              <path d="M3 9h18" />
+            </svg>
+          </button>
+
           <button
             className="update-check-button"
             onClick={() => void checkForUpdates(true)}

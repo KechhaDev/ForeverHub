@@ -1616,3 +1616,66 @@ a:hover {
     animation: none;
   }
 }
+
+
+/* ============================================================
+   DIRECTORY BUTTON
+   ============================================================ */
+
+.header-update {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.directory-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+
+  padding: 0;
+
+  color: #aab4bf;
+  background: var(--surface, #1b2531);
+
+  border: 1px solid var(--border, #303e4d);
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.directory-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.directory-button:hover {
+  color: #36d399;
+  background: var(--surface-hover, #222f3d);
+  border-color: #36d399;
+}
+
+.directory-button:active {
+  transform: scale(0.94);
+}
+
+.directory-button:focus-visible {
+  outline: 2px solid #36d399;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .directory-button {
+    transition: none;
+  }
+}

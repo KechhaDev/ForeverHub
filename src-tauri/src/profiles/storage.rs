@@ -18,7 +18,9 @@ fn get_appdata_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn get_foreverhub_dir() -> Option<PathBuf> {
+
+
+pub(crate) fn get_foreverhub_dir() -> Option<PathBuf> {
     let appdata = get_appdata_dir()?;
     let foreverhub_dir = appdata.join("ForeverHub");
 

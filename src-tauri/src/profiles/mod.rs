@@ -1,4 +1,3 @@
-
 mod model;
 mod storage;
 
@@ -9,10 +8,11 @@ pub(crate) use model::{
 
 pub(crate) use storage::{
     find_profile,
+    get_foreverhub_dir,
     get_runtimes_dir,
     setup_directories,
     update_modpack_version,
-    update_profile_metadata,
-    update_profile_ram,
     list_profiles,
+    update_profile_ram,
+    update_profile_metadata,
 };

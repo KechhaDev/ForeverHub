@@ -3,6 +3,7 @@ pub(crate) mod auth;
 pub(crate) mod github;
 pub(crate) mod launcher;
 pub(crate) mod profiles;
+pub(crate) mod storage;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
